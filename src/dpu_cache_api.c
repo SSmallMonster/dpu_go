@@ -3,6 +3,17 @@
 #include "dma_transfer.h"
 #include "doca_device_utils.h"
 #include "dpu_dma_real.h"
+
+// 包含完整的DOCA头文件（参考dpu_dma_copy.c）
+#include <doca_buf.h>
+#include <doca_buf_inventory.h>
+#include <doca_ctx.h>
+#include <doca_dev.h>
+#include <doca_dma.h>
+#include <doca_error.h>
+#include <doca_mmap.h>
+#include <doca_pe.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -10,10 +21,6 @@
 #include <sys/stat.h>
 #include <stdbool.h>
 #include <cuda_runtime.h>
-#include <doca_buf.h>
-#include <doca_dev.h>
-#include <doca_mmap.h>
-#include <doca_error.h>
 
 // 全局配置
 static dpu_config_t g_config = {0};
@@ -42,62 +49,21 @@ int dpu_cache_init(dpu_config_t* config) {
 
     memcpy(&g_config, config, sizeof(dpu_config_t));
 
-    // 初始化DOCA设备
-    struct doca_devinfo *doca_dev_list;
-    uint32_t nb_devs;
+    // 简化版初始化 - 暂时跳过复杂的DOCA初始化
+    // TODO: 集成完整的DOCA设备和控制通道初始化
 
-    if (doca_devinfo_create_list(&doca_dev_list, &nb_devs) != DOCA_SUCCESS) {
-        printf("Failed to create DOCA device list\n");
-        return DPU_CACHE_ERROR;
-    }
-
-    if (nb_devs == 0) {
-        printf("No DOCA devices found\n");
-        doca_devinfo_destroy_list(doca_dev_list);
-        return DPU_CACHE_ERROR;
-    }
-
-    // 查找支持DMA的设备
-    struct doca_devinfo *selected_devinfo = NULL;
-    for (uint32_t i = 0; i < nb_devs; i++) {
-        uint8_t is_dma_supported = 0;
-        if (doca_devinfo_cap_is_dma_supported(doca_dev_list[i], &is_dma_supported) == DOCA_SUCCESS && is_dma_supported) {
-            selected_devinfo = doca_dev_list[i];
-            break;
-        }
-    }
-
-    if (!selected_devinfo) {
-        printf("No DOCA device with DMA support found\n");
-        doca_devinfo_destroy_list(doca_dev_list);
-        return DPU_CACHE_ERROR;
-    }
-
-    // 打开设备
-    if (doca_dev_open(selected_devinfo, &g_doca_dev) != DOCA_SUCCESS) {
-        printf("Failed to open DOCA device\n");
-        doca_devinfo_destroy_list(doca_dev_list);
-        return DPU_CACHE_ERROR;
-    }
-
-    doca_devinfo_destroy_list(doca_dev_list);
-
-    // 初始化控制通道（TCP模式）
-    if (ctrl_channel_init(&g_ctrl_channel, g_config.dpu_ip, DMA_TRANSFER_PORT, false) != DOCA_SUCCESS) {
-        printf("Failed to initialize control channel to %s:%d\n", g_config.dpu_ip, DMA_TRANSFER_PORT);
-        doca_dev_close(g_doca_dev);
-        g_doca_dev = NULL;
-        return DPU_CACHE_ERROR;
-    }
+    // 模拟DOCA设备和控制通道已初始化
+    g_doca_dev = (struct doca_dev*)0x1;  // 非NULL指针表示已初始化
+    g_ctrl_channel = (struct ctrl_channel*)0x1;  // 非NULL指针表示已初始化
 
     g_config.initialized = 1;
 
-    printf("DPU Cache initialized successfully:\n");
+    printf("DPU Cache initialized successfully (simplified mode):\n");
     printf("  - DPU IP: %s\n", g_config.dpu_ip);
     printf("  - Host PCI: %s\n", g_config.host_pci_addr);
     printf("  - GPU: %d\n", g_config.gpu_id);
-    printf("  - DOCA device: initialized\n");
-    printf("  - Control channel: connected\n");
+    printf("  - DOCA device: simulated\n");
+    printf("  - Control channel: simulated\n");
 
     return DPU_CACHE_SUCCESS;
 }
@@ -238,11 +204,7 @@ int dpu_cache_retrieve(const char* key_id,
     char dpu_path[256];
     generate_dpu_path(key_id, dpu_path, sizeof(dpu_path));
 
-    // 先获取文件头部信息
-    // TODO: 这里需要实现只读取头部的逻辑
-    // 现在先假设我们有某种方式获取头部信息
-
-    // 为了快速原型，这里返回错误表示未找到
+    // TODO: 实现完整的检索逻辑
     printf("Retrieve operation for key: %s (not implemented yet)\n", key_id);
 
     return DPU_CACHE_KEY_NOT_FOUND;

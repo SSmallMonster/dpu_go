@@ -41,13 +41,63 @@ int dpu_cache_init(dpu_config_t* config) {
     }
 
     memcpy(&g_config, config, sizeof(dpu_config_t));
+
+    // 初始化DOCA设备
+    struct doca_devinfo *doca_dev_list;
+    uint32_t nb_devs;
+
+    if (doca_devinfo_create_list(&doca_dev_list, &nb_devs) != DOCA_SUCCESS) {
+        printf("Failed to create DOCA device list\n");
+        return DPU_CACHE_ERROR;
+    }
+
+    if (nb_devs == 0) {
+        printf("No DOCA devices found\n");
+        doca_devinfo_destroy_list(doca_dev_list);
+        return DPU_CACHE_ERROR;
+    }
+
+    // 查找支持DMA的设备
+    struct doca_devinfo *selected_devinfo = NULL;
+    for (uint32_t i = 0; i < nb_devs; i++) {
+        uint8_t is_dma_supported = 0;
+        if (doca_devinfo_cap_is_dma_supported(doca_dev_list[i], &is_dma_supported) == DOCA_SUCCESS && is_dma_supported) {
+            selected_devinfo = doca_dev_list[i];
+            break;
+        }
+    }
+
+    if (!selected_devinfo) {
+        printf("No DOCA device with DMA support found\n");
+        doca_devinfo_destroy_list(doca_dev_list);
+        return DPU_CACHE_ERROR;
+    }
+
+    // 打开设备
+    if (doca_dev_open(selected_devinfo, &g_doca_dev) != DOCA_SUCCESS) {
+        printf("Failed to open DOCA device\n");
+        doca_devinfo_destroy_list(doca_dev_list);
+        return DPU_CACHE_ERROR;
+    }
+
+    doca_devinfo_destroy_list(doca_dev_list);
+
+    // 初始化控制通道（TCP模式）
+    if (ctrl_channel_init(&g_ctrl_channel, g_config.dpu_ip, DMA_TRANSFER_PORT, false) != DOCA_SUCCESS) {
+        printf("Failed to initialize control channel to %s:%d\n", g_config.dpu_ip, DMA_TRANSFER_PORT);
+        doca_dev_close(g_doca_dev);
+        g_doca_dev = NULL;
+        return DPU_CACHE_ERROR;
+    }
+
     g_config.initialized = 1;
 
-    // TODO: 完整的DOCA初始化
-    // 暂时先用简化版本，后续添加真正的DOCA设备和控制通道初始化
-
-    printf("DPU Cache initialized - DPU IP: %s, Host PCI: %s, GPU: %d\n",
-           g_config.dpu_ip, g_config.host_pci_addr, g_config.gpu_id);
+    printf("DPU Cache initialized successfully:\n");
+    printf("  - DPU IP: %s\n", g_config.dpu_ip);
+    printf("  - Host PCI: %s\n", g_config.host_pci_addr);
+    printf("  - GPU: %d\n", g_config.gpu_id);
+    printf("  - DOCA device: initialized\n");
+    printf("  - Control channel: connected\n");
 
     return DPU_CACHE_SUCCESS;
 }
@@ -100,19 +150,16 @@ static int perform_dma_push(void* gpu_data, size_t total_size, const char* dpu_p
         return DPU_CACHE_ERROR;
     }
 
-    printf("Performing DMA push: size=%zu bytes to %s\n", total_size, dpu_path);
-
-    // 如果有真正的DOCA设备和控制通道，使用真实DMA传输
-    if (g_doca_dev && g_ctrl_channel) {
-        printf("Using real DOCA DMA transfer\n");
-        return perform_real_dma_push(g_doca_dev, g_ctrl_channel,
-                                   gpu_data, total_size, dpu_path,
-                                   g_config.host_pci_addr);
-    } else {
-        printf("DOCA not initialized, using mock transfer\n");
-        // 模拟传输成功
-        return DPU_CACHE_SUCCESS;
+    if (!g_doca_dev || !g_ctrl_channel) {
+        printf("DOCA device or control channel not initialized\n");
+        return DPU_CACHE_ERROR;
     }
+
+    printf("Performing real DMA push: size=%zu bytes to %s\n", total_size, dpu_path);
+
+    return perform_real_dma_push(g_doca_dev, g_ctrl_channel,
+                               gpu_data, total_size, dpu_path,
+                               g_config.host_pci_addr);
 }
 
 static int perform_dma_pull(const char* dpu_path, void* gpu_data, size_t total_size) {
@@ -121,12 +168,16 @@ static int perform_dma_pull(const char* dpu_path, void* gpu_data, size_t total_s
         return DPU_CACHE_ERROR;
     }
 
-    printf("Performing DMA pull: %s to GPU, size=%zu bytes\n", dpu_path, total_size);
+    if (!g_doca_dev || !g_ctrl_channel) {
+        printf("DOCA device or control channel not initialized\n");
+        return DPU_CACHE_ERROR;
+    }
 
-    // 这里应该调用现有的gpu_dma_copy逻辑
-    // TODO: 集成真正的DOCA DMA传输逻辑
+    printf("Performing real DMA pull: %s to GPU, size=%zu bytes\n", dpu_path, total_size);
 
-    return DPU_CACHE_SUCCESS;
+    return perform_real_dma_pull(g_doca_dev, g_ctrl_channel,
+                               dpu_path, gpu_data, total_size,
+                               g_config.host_pci_addr);
 }
 
 int dpu_cache_store(const char* key_id,

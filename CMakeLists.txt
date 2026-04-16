@@ -31,6 +31,21 @@ target_link_libraries(dpu_dma_copy
 )
 target_compile_options(dpu_dma_copy PRIVATE -Wall -Wextra)
 
+# 添加DPU Cache共享库 (带条件CUDA支持)
+add_library(dpu_cache SHARED
+    src/dpu_cache_api.c
+    src/ctrl_channel.c
+    src/comch_ctrl.c
+    src/doca_device_utils.c
+)
+target_link_libraries(dpu_cache
+    ${DOCA_DMA_LIB}
+    ${DOCA_COMMON_LIB}
+    ${DOCA_COMCH_LIB}
+    pthread
+)
+target_compile_options(dpu_cache PRIVATE -Wall -Wextra -fPIC)
+
 include(CheckLanguage)
 check_language(CUDA)
 
@@ -38,6 +53,9 @@ if(CMAKE_CUDA_COMPILER AND NOT CMAKE_CROSSCOMPILING)
     enable_language(CUDA)
     set(CMAKE_CUDA_STANDARD 11)
     find_package(CUDAToolkit REQUIRED)
+
+    # 添加CUDA支持到共享库
+    target_link_libraries(dpu_cache CUDA::cudart)
 
     add_executable(gpu_dma_copy
         src/gpu_dma_copy.cu
@@ -54,20 +72,4 @@ if(CMAKE_CUDA_COMPILER AND NOT CMAKE_CROSSCOMPILING)
     target_compile_options(gpu_dma_copy PRIVATE
         $<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler -Wall>
     )
-
-    # 添加DPU Cache共享库
-    add_library(dpu_cache SHARED
-        src/dpu_cache_api.c
-        src/ctrl_channel.c
-        src/comch_ctrl.c
-        src/doca_device_utils.c
-    )
-    target_link_libraries(dpu_cache
-        CUDA::cudart
-        ${DOCA_DMA_LIB}
-        ${DOCA_COMMON_LIB}
-        ${DOCA_COMCH_LIB}
-        pthread
-    )
-    target_compile_options(dpu_cache PRIVATE -Wall -Wextra -fPIC)
 endif()

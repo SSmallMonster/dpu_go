@@ -1,0 +1,206 @@
+#include "dpu_cache_api.h"
+#include "ctrl_channel.h"
+#include "dma_transfer.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <cuda_runtime.h>
+
+// 全局配置
+static dpu_config_t g_config = {0};
+
+// KV文件头格式
+typedef struct {
+    char magic[4];           // "KVCH"
+    uint32_t version;        // 版本号
+    int32_t k_dtype;         // K tensor数据类型
+    int32_t v_dtype;         // V tensor数据类型
+    int32_t k_ndim;          // K tensor维度数
+    int32_t v_ndim;          // V tensor维度数
+    int32_t k_shape[4];      // K tensor形状
+    int32_t v_shape[4];      // V tensor形状
+    uint64_t k_size;         // K tensor字节数
+    uint64_t v_size;         // V tensor字节数
+    char reserved[8];        // 预留
+} kv_header_t;
+
+int dpu_cache_init(dpu_config_t* config) {
+    if (!config) {
+        return DPU_CACHE_ERROR;
+    }
+
+    memcpy(&g_config, config, sizeof(dpu_config_t));
+    g_config.initialized = 1;
+
+    printf("DPU Cache initialized - DPU IP: %s, Host PCI: %s, GPU: %d\n",
+           g_config.dpu_ip, g_config.host_pci_addr, g_config.gpu_id);
+
+    return DPU_CACHE_SUCCESS;
+}
+
+int dpu_cache_cleanup(void) {
+    memset(&g_config, 0, sizeof(dpu_config_t));
+    return DPU_CACHE_SUCCESS;
+}
+
+// 生成DPU端文件路径
+static void generate_dpu_path(const char* key_id, char* dpu_path, size_t path_size) {
+    snprintf(dpu_path, path_size, "/tmp/kv_cache_%s.bin", key_id);
+}
+
+// 创建KV头部
+static void create_kv_header(kv_header_t* header,
+                            int k_dtype, int* k_shape, int k_ndim, size_t k_size,
+                            int v_dtype, int* v_shape, int v_ndim, size_t v_size) {
+    memset(header, 0, sizeof(kv_header_t));
+    memcpy(header->magic, "KVCH", 4);
+    header->version = 1;
+    header->k_dtype = k_dtype;
+    header->v_dtype = v_dtype;
+    header->k_ndim = k_ndim;
+    header->v_ndim = v_ndim;
+    header->k_size = k_size;
+    header->v_size = v_size;
+
+    // 复制shape，最多4维
+    for (int i = 0; i < k_ndim && i < 4; i++) {
+        header->k_shape[i] = k_shape[i];
+    }
+    for (int i = 0; i < v_ndim && i < 4; i++) {
+        header->v_shape[i] = v_shape[i];
+    }
+}
+
+// 简化的DMA传输函数（基于现有代码）
+static int perform_dma_push(void* gpu_data, size_t total_size, const char* dpu_path) {
+    if (!g_config.initialized) {
+        printf("DPU Cache not initialized\n");
+        return DPU_CACHE_ERROR;
+    }
+
+    printf("Performing DMA push: size=%zu bytes to %s\n", total_size, dpu_path);
+
+    // 这里应该调用现有的gpu_dma_copy逻辑
+    // 为了快速原型，我们先用简单的模拟实现
+
+    // TODO: 集成真正的DOCA DMA传输逻辑
+    // 现在先返回成功，实际应该调用现有的DMA传输函数
+
+    return DPU_CACHE_SUCCESS;
+}
+
+static int perform_dma_pull(const char* dpu_path, void* gpu_data, size_t total_size) {
+    if (!g_config.initialized) {
+        printf("DPU Cache not initialized\n");
+        return DPU_CACHE_ERROR;
+    }
+
+    printf("Performing DMA pull: %s to GPU, size=%zu bytes\n", dpu_path, total_size);
+
+    // 这里应该调用现有的gpu_dma_copy逻辑
+    // TODO: 集成真正的DOCA DMA传输逻辑
+
+    return DPU_CACHE_SUCCESS;
+}
+
+int dpu_cache_store(const char* key_id,
+                   void* k_data, size_t k_size, int k_dtype, int* k_shape, int k_ndim,
+                   void* v_data, size_t v_size, int v_dtype, int* v_shape, int v_ndim) {
+
+    if (!g_config.initialized || !key_id || !k_data || !v_data) {
+        return DPU_CACHE_ERROR;
+    }
+
+    // 生成DPU文件路径
+    char dpu_path[256];
+    generate_dpu_path(key_id, dpu_path, sizeof(dpu_path));
+
+    // 创建KV头部
+    kv_header_t header;
+    create_kv_header(&header, k_dtype, k_shape, k_ndim, k_size,
+                     v_dtype, v_shape, v_ndim, v_size);
+
+    // 分配临时GPU内存用于组合头部和数据
+    size_t total_size = sizeof(kv_header_t) + k_size + v_size;
+    void* gpu_buffer;
+    cudaError_t cuda_result = cudaMalloc(&gpu_buffer, total_size);
+    if (cuda_result != cudaSuccess) {
+        printf("Failed to allocate GPU memory: %s\n", cudaGetErrorString(cuda_result));
+        return DPU_CACHE_ERROR;
+    }
+
+    // 复制数据到GPU buffer
+    cudaMemcpy(gpu_buffer, &header, sizeof(kv_header_t), cudaMemcpyHostToDevice);
+    cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t), k_data, k_size, cudaMemcpyDeviceToDevice);
+    cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t) + k_size, v_data, v_size, cudaMemcpyDeviceToDevice);
+
+    // 执行DMA传输
+    int result = perform_dma_push(gpu_buffer, total_size, dpu_path);
+
+    // 清理GPU内存
+    cudaFree(gpu_buffer);
+
+    if (result == DPU_CACHE_SUCCESS) {
+        printf("Successfully stored KV cache for key: %s\n", key_id);
+    } else {
+        printf("Failed to store KV cache for key: %s\n", key_id);
+    }
+
+    return result;
+}
+
+int dpu_cache_retrieve(const char* key_id,
+                      void** k_data, size_t* k_size, int* k_dtype, int* k_shape, int* k_ndim,
+                      void** v_data, size_t* v_size, int* v_dtype, int* v_shape, int* v_ndim) {
+
+    if (!g_config.initialized || !key_id) {
+        return DPU_CACHE_ERROR;
+    }
+
+    // 生成DPU文件路径
+    char dpu_path[256];
+    generate_dpu_path(key_id, dpu_path, sizeof(dpu_path));
+
+    // 先获取文件头部信息
+    // TODO: 这里需要实现只读取头部的逻辑
+    // 现在先假设我们有某种方式获取头部信息
+
+    // 为了快速原型，这里返回错误表示未找到
+    printf("Retrieve operation for key: %s (not implemented yet)\n", key_id);
+
+    return DPU_CACHE_KEY_NOT_FOUND;
+}
+
+int dpu_cache_remove(const char* key_id) {
+    if (!g_config.initialized || !key_id) {
+        return DPU_CACHE_ERROR;
+    }
+
+    // 生成DPU文件路径
+    char dpu_path[256];
+    generate_dpu_path(key_id, dpu_path, sizeof(dpu_path));
+
+    printf("Remove operation for key: %s -> %s\n", key_id, dpu_path);
+
+    // TODO: 发送删除文件的命令到DPU
+
+    return DPU_CACHE_SUCCESS;
+}
+
+int dpu_cache_contains(const char* key_id) {
+    if (!g_config.initialized || !key_id) {
+        return DPU_CACHE_ERROR;
+    }
+
+    // 生成DPU文件路径
+    char dpu_path[256];
+    generate_dpu_path(key_id, dpu_path, sizeof(dpu_path));
+
+    printf("Contains check for key: %s -> %s\n", key_id, dpu_path);
+
+    // TODO: 检查DPU上文件是否存在
+
+    return DPU_CACHE_KEY_NOT_FOUND;  // 默认返回不存在
+}

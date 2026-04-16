@@ -46,11 +46,20 @@ class DPUAgent:
 
     def _load_library(self):
         """加载共享库"""
-        # 寻找共享库路径
+        # 获取当前文件的目录，然后寻找共享库
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.abspath(os.path.join(current_dir, "../../.."))
+
         possible_paths = [
+            # 相对于项目根目录的路径
+            os.path.join(project_root, "build/libdpu_cache.so"),
+            os.path.join(project_root, "build-host/libdpu_cache.so"),
+            # 相对路径
             "../build/libdpu_cache.so",
-            "../build-host/libdpu_cache.so",
+            "../../build/libdpu_cache.so",
+            "../../../build/libdpu_cache.so",
             "./libdpu_cache.so",
+            # 绝对路径
             "/usr/local/lib/libdpu_cache.so"
         ]
 

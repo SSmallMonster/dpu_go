@@ -34,6 +34,7 @@ target_compile_options(dpu_dma_copy PRIVATE -Wall -Wextra)
 # 添加DPU Cache共享库 (带条件CUDA支持)
 add_library(dpu_cache SHARED
     src/dpu_cache_api.c
+    src/dpu_dma_real.c
     src/ctrl_channel.c
     src/comch_ctrl.c
     src/doca_device_utils.c

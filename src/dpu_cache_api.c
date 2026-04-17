@@ -46,24 +46,59 @@ int dpu_cache_init(dpu_config_t* config) {
     if (!config) {
         return DPU_CACHE_ERROR;
     }
+    printf("===========================================\n");
+    printf("  DPU Cache API Configuration              \n");
+    printf("===========================================\n");
+    printf("Configuration details:\n");
+    printf("  - DPU IP address: %s\n", g_config.dpu_ip);
+    printf("  - Host PCI address: %s\n", g_config.host_pci_addr);
+    printf("  - GPU device ID: %d\n", g_config.gpu_id);
+    printf("  - Max concurrent operations: %d\n", g_config.max_concurrent_ops);
+    printf("  - Initialization status: %s\n", g_config.initialized ? "SUCCESS" : "PENDING");
+    printf("-------------------------------------------\n");
 
     memcpy(&g_config, config, sizeof(dpu_config_t));
 
     // 简化版初始化 - 暂时跳过复杂的DOCA初始化
     // TODO: 集成完整的DOCA设备和控制通道初始化
+    CUDA_CHECK(cudaSetDevice(g_config.gpu_id));
+	{
+		cudaDeviceProp prop;
+		CUDA_CHECK(cudaGetDeviceProperties(&prop, g_config.gpu_id));
+	printf("[HOST] Using GPU %d\n", g_config.gpu_id);
+	}
 
-    // 模拟DOCA设备和控制通道已初始化
-    g_doca_dev = (struct doca_dev*)0x1;  // 非NULL指针表示已初始化
-    g_ctrl_channel = (struct ctrl_channel*)0x1;  // 非NULL指针表示已初始化
-
+    doca_error_t result;
+	if (g_config.dpu_ip != NULL) {
+		result = ctrl_channel_tcp_client_create(g_config.dpu_ip, DMA_TRANSFER_PORT, &g_ctrl_channel);
+		if (result != DOCA_SUCCESS) {
+			fprintf(stderr, "Failed to connect TCP to %s:%u: %s\n",
+				g_config.dpu_ip, DMA_TRANSFER_PORT, doca_error_get_descr(result));
+			return EXIT_FAILURE;
+		}
+	} else {
+		result = ctrl_channel_comch_client_create(service_name, pci_addr, &ch);
+		if (result != DOCA_SUCCESS) {
+			fprintf(stderr, "Failed to create Comch client: %s\n", doca_error_get_descr(result));
+			return EXIT_FAILURE;
+		}
+	}
+	(void)ctrl_channel_wait_for_connection(ch);
+    
+    // 初始化 DOCA 设备
+    result = open_dma_device_by_pci(pci_addr, &g_doca_dev);
+	if (result != DOCA_SUCCESS) {
+		fprintf(stderr, "Failed to open DOCA device %s: %s\n", pci_addr, doca_error_get_descr(result));
+		goto fail;
+	}
     g_config.initialized = 1;
 
     printf("DPU Cache initialized successfully (simplified mode):\n");
     printf("  - DPU IP: %s\n", g_config.dpu_ip);
     printf("  - Host PCI: %s\n", g_config.host_pci_addr);
     printf("  - GPU: %d\n", g_config.gpu_id);
-    printf("  - DOCA device: simulated\n");
-    printf("  - Control channel: simulated\n");
+    printf("  - DOCA device: %s\n", g_doca_dev ? "initialized" : "not initialized");
+    printf("  - Control channel: %s\n", g_ctrl_channel ? "initialized" : "not initialized");
 
     return DPU_CACHE_SUCCESS;
 }

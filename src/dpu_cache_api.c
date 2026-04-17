@@ -46,7 +46,7 @@ int dpu_cache_init(dpu_config_t* config) {
     if (!config) {
         return DPU_CACHE_ERROR;
     }
-    printf("  - DPU IP address: %s\n", config.dpu_ip);
+    printf("  - DPU IP address: %s\n", config->dpu_ip);
     memcpy(&g_config, config, sizeof(dpu_config_t));
 
     printf("===========================================\n");

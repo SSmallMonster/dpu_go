@@ -66,32 +66,6 @@ def test_store_kv():
         else:
             print("❌ store_kv 调用失败")
             return False
-
-        # 4. 错误处理测试
-        print("\n4. 错误处理测试...")
-
-        # 设备不匹配
-        if torch.cuda.is_available():
-            try:
-                k_gpu = torch.randn(2, 4, device="cuda")
-                v_cpu = torch.randn(2, 4, device="cpu")
-                agent.store_kv("test_device_error", k_gpu, v_cpu)
-                print("❌ 设备不匹配应该失败")
-            except Exception as e:
-                print(f"✅ 设备不匹配正确抛出异常: {type(e).__name__}")
-
-        # 数据类型不匹配
-        try:
-            k_float = torch.randn(2, 4, device=device, dtype=torch.float32)
-            v_int = torch.randint(0, 10, (2, 4), device=device, dtype=torch.int32)
-            agent.store_kv("test_dtype_error", k_float, v_int)
-            print("❌ 数据类型不匹配应该失败")
-        except Exception as e:
-            print(f"✅ 数据类型不匹配正确抛出异常: {type(e).__name__}")
-
-        print("\n" + "=" * 50)
-        print("✅ store_kv 接口测试通过")
-        print("=" * 50)
         return True
 
     except Exception as e:

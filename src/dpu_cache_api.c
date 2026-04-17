@@ -58,12 +58,6 @@ int dpu_cache_init(dpu_config_t* config) {
     printf("-------------------------------------------\n");
 
     memcpy(&g_config, config, sizeof(dpu_config_t));
-    CUDA_CHECK(cudaSetDevice(g_config.gpu_id));
-	{
-		cudaDeviceProp prop;
-		CUDA_CHECK(cudaGetDeviceProperties(&prop, g_config.gpu_id));
-	printf("[HOST] Using GPU %d\n", g_config.gpu_id);
-	}
 
     doca_error_t result;
 	if (g_config.dpu_ip != NULL) {

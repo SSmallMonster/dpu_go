@@ -58,9 +58,6 @@ int dpu_cache_init(dpu_config_t* config) {
     printf("-------------------------------------------\n");
 
     memcpy(&g_config, config, sizeof(dpu_config_t));
-
-    // 简化版初始化 - 暂时跳过复杂的DOCA初始化
-    // TODO: 集成完整的DOCA设备和控制通道初始化
     CUDA_CHECK(cudaSetDevice(g_config.gpu_id));
 	{
 		cudaDeviceProp prop;
@@ -77,18 +74,18 @@ int dpu_cache_init(dpu_config_t* config) {
 			return EXIT_FAILURE;
 		}
 	} else {
-		result = ctrl_channel_comch_client_create(service_name, pci_addr, &ch);
+		result = ctrl_channel_comch_client_create("dpu_copy", g_config.host_pci_addr, &g_ctrl_channel);
 		if (result != DOCA_SUCCESS) {
 			fprintf(stderr, "Failed to create Comch client: %s\n", doca_error_get_descr(result));
 			return EXIT_FAILURE;
 		}
 	}
-	(void)ctrl_channel_wait_for_connection(ch);
+	(void)ctrl_channel_wait_for_connection(g_ctrl_channel);
     
     // 初始化 DOCA 设备
-    result = open_dma_device_by_pci(pci_addr, &g_doca_dev);
+    result = open_dma_device_by_pci(g_config.host_pci_addr, &g_doca_dev);
 	if (result != DOCA_SUCCESS) {
-		fprintf(stderr, "Failed to open DOCA device %s: %s\n", pci_addr, doca_error_get_descr(result));
+		fprintf(stderr, "Failed to open DOCA device %s: %s\n", g_config.host_pci_addr, doca_error_get_descr(result));
 		goto fail;
 	}
     g_config.initialized = 1;

@@ -80,7 +80,7 @@ int dpu_cache_init(dpu_config_t* config) {
     result = open_dma_device_by_pci(g_config.host_pci_addr, &g_doca_dev);
 	if (result != DOCA_SUCCESS) {
 		fprintf(stderr, "Failed to open DOCA device %s: %s\n", g_config.host_pci_addr, doca_error_get_descr(result));
-		goto fail;
+		return EXIT_FAILURE;
 	}
     g_config.initialized = 1;
 

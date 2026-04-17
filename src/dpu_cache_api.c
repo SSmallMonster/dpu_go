@@ -46,6 +46,9 @@ int dpu_cache_init(dpu_config_t* config) {
     if (!config) {
         return DPU_CACHE_ERROR;
     }
+    printf("  - DPU IP address: %s\n", config.dpu_ip);
+    memcpy(&g_config, config, sizeof(dpu_config_t));
+
     printf("===========================================\n");
     printf("  DPU Cache API Configuration              \n");
     printf("===========================================\n");
@@ -56,8 +59,6 @@ int dpu_cache_init(dpu_config_t* config) {
     printf("  - Max concurrent operations: %d\n", g_config.max_concurrent_ops);
     printf("  - Initialization status: %s\n", g_config.initialized ? "SUCCESS" : "PENDING");
     printf("-------------------------------------------\n");
-
-    memcpy(&g_config, config, sizeof(dpu_config_t));
 
     doca_error_t result;
 	if (g_config.dpu_ip != NULL) {

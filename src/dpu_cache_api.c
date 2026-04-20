@@ -200,7 +200,7 @@ int dpu_cache_store(const char* key_id,
     }
 
     // 检测k_data和v_data的内存位置
-    cudaPointerAttributes k_attrs, v_attrs;
+    struct cudaPointerAttributes k_attrs, v_attrs;
     bool k_is_gpu = (cudaPointerGetAttributes(&k_attrs, k_data) == cudaSuccess && 
                      k_attrs.type == cudaMemoryTypeDevice);
     bool v_is_gpu = (cudaPointerGetAttributes(&v_attrs, v_data) == cudaSuccess && 
@@ -210,14 +210,14 @@ int dpu_cache_store(const char* key_id,
     cudaMemcpy(gpu_buffer, &header, sizeof(kv_header_t), cudaMemcpyHostToDevice);
 
     // 复制K张量（根据源位置选择拷贝类型）
-    cudaMemcpyKind k_copy_kind = k_is_gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
+    enum cudaMemcpyKind k_copy_kind = k_is_gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
     cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t), k_data, k_size, k_copy_kind);
     printf("K tensor copy: %s -> GPU (%s)\n", 
        k_is_gpu ? "GPU" : "CPU", 
        k_is_gpu ? "Device-to-Device" : "Host-to-Device");    
 
     // 复制V张量（根据源位置选择拷贝类型）
-    cudaMemcpyKind v_copy_kind = v_is_gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
+    enum cudaMemcpyKind v_copy_kind = v_is_gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
     cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t) + k_size, v_data, v_size, v_copy_kind);
     printf("V tensor copy: %s -> GPU (%s)\n", 
        v_is_gpu ? "GPU" : "CPU", 

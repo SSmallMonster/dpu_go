@@ -138,21 +138,36 @@ static void create_kv_header(kv_header_t* header,
 
 // 真正的DMA传输函数
 static int perform_dma_push(void* gpu_data, size_t total_size, const char* dpu_path) {
+    printf("[DPU_CACHE] perform_dma_push called: gpu_data=%p, size=%zu, path=%s\n",
+           gpu_data, total_size, dpu_path);
+
     if (!g_config.initialized) {
-        printf("DPU Cache not initialized\n");
+        printf("[DPU_CACHE ERROR] DPU Cache not initialized\n");
+        fprintf(stderr, "[DPU_CACHE ERROR] DPU Cache not initialized\n");
         return DPU_CACHE_ERROR;
     }
 
     if (!g_doca_dev || !g_ctrl_channel) {
-        printf("DOCA device or control channel not initialized\n");
+        printf("[DPU_CACHE ERROR] DOCA device or control channel not initialized (dev=%p, ch=%p)\n",
+               g_doca_dev, g_ctrl_channel);
+        fprintf(stderr, "[DPU_CACHE ERROR] DOCA device or control channel not initialized\n");
         return DPU_CACHE_ERROR;
     }
 
-    printf("Performing real DMA push: size=%zu bytes to %s\n", total_size, dpu_path);
+    printf("[DPU_CACHE] Performing real DMA push: size=%zu bytes to %s\n", total_size, dpu_path);
 
-    return perform_real_dma_push(g_doca_dev, g_ctrl_channel,
-                               gpu_data, total_size, dpu_path,
-                               g_config.host_pci_addr);
+    int result = perform_real_dma_push(g_doca_dev, g_ctrl_channel,
+                                     gpu_data, total_size, dpu_path,
+                                     g_config.host_pci_addr);
+
+    if (result != 0) {
+        printf("[DPU_CACHE ERROR] perform_real_dma_push failed with code: %d\n", result);
+        fprintf(stderr, "[DPU_CACHE ERROR] DMA push failed with error code: %d\n", result);
+    } else {
+        printf("[DPU_CACHE SUCCESS] DMA push completed successfully\n");
+    }
+
+    return result;
 }
 
 static int perform_dma_pull(const char* dpu_path, void* gpu_data, size_t total_size) {

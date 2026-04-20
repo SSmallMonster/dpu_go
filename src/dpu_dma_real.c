@@ -88,17 +88,23 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     struct timespec start_ts, end_ts;
 
     printf("[HOST] Starting real DMA push: %zu bytes to %s\n", total_size, dpu_path);
+    fprintf(stderr, "[DMA_PUSH] Starting DMA push: size=%zu, path=%s, gpu_data=%p\n",
+            total_size, dpu_path, gpu_data);
 
     // 创建GPU memory map - 基于gpu_dma_copy.cu的export_gpu_buffer
     result = doca_mmap_create(&gpu_mmap);
     if (result != DOCA_SUCCESS) {
         printf("Failed to create mmap: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to create mmap: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
         return -1;
     }
 
     result = doca_mmap_add_dev(gpu_mmap, dev);
     if (result != DOCA_SUCCESS) {
         printf("Failed to add device to mmap: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to add device to mmap: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
         doca_mmap_destroy(gpu_mmap);
         return -1;
     }
@@ -106,6 +112,8 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     result = doca_mmap_set_memrange(gpu_mmap, gpu_data, total_size);
     if (result != DOCA_SUCCESS) {
         printf("Failed to set memrange: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to set memrange: %s (code: %d, addr: %p, size: %zu)\n",
+                doca_error_get_descr(result), result, gpu_data, total_size);
         doca_mmap_destroy(gpu_mmap);
         return -1;
     }
@@ -113,6 +121,8 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     result = doca_mmap_set_permissions(gpu_mmap, DOCA_ACCESS_FLAG_PCI_READ_ONLY);
     if (result != DOCA_SUCCESS) {
         printf("Failed to set permissions: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to set permissions: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
         doca_mmap_destroy(gpu_mmap);
         return -1;
     }
@@ -120,6 +130,8 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     result = doca_mmap_start(gpu_mmap);
     if (result != DOCA_SUCCESS) {
         printf("Failed to start mmap: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to start mmap: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
         doca_mmap_destroy(gpu_mmap);
         return -1;
     }
@@ -128,6 +140,9 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     result = doca_mmap_export_pci(gpu_mmap, dev, &desc, &desc_len);
     if (result != DOCA_SUCCESS) {
         printf("Failed to export mmap: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to export mmap: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
+        fprintf(stderr, "[DMA_PUSH ERROR] GPU memory export failed - check GPU memory accessibility\n");
         doca_mmap_stop(gpu_mmap);
         doca_mmap_destroy(gpu_mmap);
         return -1;
@@ -135,6 +150,9 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
 
     if (desc_len > DMA_EXPORT_DESC_MAX) {
         printf("Export descriptor too large: %zu > %d\n", desc_len, DMA_EXPORT_DESC_MAX);
+        fprintf(stderr, "[DMA_PUSH ERROR] Export descriptor too large: %zu > %d\n",
+                desc_len, DMA_EXPORT_DESC_MAX);
+        fprintf(stderr, "[DMA_PUSH ERROR] Memory descriptor exceeds maximum allowed size\n");
         doca_mmap_stop(gpu_mmap);
         doca_mmap_destroy(gpu_mmap);
         return -1;
@@ -155,9 +173,18 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     memcpy(req.export_desc, desc, desc_len);
 
     // 发送请求并等待响应
+    printf("[HOST] Sending DMA request: req_id=%lu, size=%zu\n", req.request_id, req.transfer_size_bytes);
+    fprintf(stderr, "[DMA_PUSH] Sending request to DPU: req_id=%lu, pci=%s, path=%s\n",
+            req.request_id, host_pci_addr, dpu_path);
+
     clock_gettime(CLOCK_MONOTONIC, &start_ts);
     if (send_request_and_recv_response(ch, &req, &resp) != 0) {
         printf("Failed to send DMA request or receive response\n");
+        fprintf(stderr, "[DMA_PUSH ERROR] Failed to send DMA request or receive response from DPU\n");
+        fprintf(stderr, "[DMA_PUSH ERROR] This could indicate:\n");
+        fprintf(stderr, "[DMA_PUSH ERROR] 1. DPU server not running\n");
+        fprintf(stderr, "[DMA_PUSH ERROR] 2. Network connectivity issue\n");
+        fprintf(stderr, "[DMA_PUSH ERROR] 3. Control channel communication failure\n");
         doca_mmap_stop(gpu_mmap);
         doca_mmap_destroy(gpu_mmap);
         return -1;
@@ -169,8 +196,12 @@ int perform_real_dma_push(struct doca_dev *dev, struct ctrl_channel *ch,
     doca_mmap_destroy(gpu_mmap);
 
     // 检查响应状态
+    printf("[HOST] Received response: status=%u, error_code=%u\n", resp.status, resp.error_code);
     if (resp.status != 0) {
         printf("DPU push failed: error_code=%u\n", resp.error_code);
+        fprintf(stderr, "[DMA_PUSH ERROR] DPU push failed with status=%u, error_code=%u\n",
+                resp.status, resp.error_code);
+        fprintf(stderr, "[DMA_PUSH ERROR] DPU-side error occurred during file write or DMA operation\n");
         return -1;
     }
 
@@ -265,6 +296,8 @@ int perform_real_dma_pull(struct doca_dev *dev, struct ctrl_channel *ch,
     result = doca_mmap_start(gpu_mmap);
     if (result != DOCA_SUCCESS) {
         printf("Failed to start mmap: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PULL ERROR] Failed to start mmap: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
         doca_mmap_destroy(gpu_mmap);
         return -1;
     }
@@ -273,6 +306,9 @@ int perform_real_dma_pull(struct doca_dev *dev, struct ctrl_channel *ch,
     result = doca_mmap_export_pci(gpu_mmap, dev, &desc, &desc_len);
     if (result != DOCA_SUCCESS) {
         printf("Failed to export mmap: %s\n", doca_error_get_descr(result));
+        fprintf(stderr, "[DMA_PULL ERROR] Failed to export mmap: %s (code: %d)\n",
+                doca_error_get_descr(result), result);
+        fprintf(stderr, "[DMA_PULL ERROR] GPU memory export failed for pull operation\n");
         doca_mmap_stop(gpu_mmap);
         doca_mmap_destroy(gpu_mmap);
         return -1;
@@ -280,6 +316,9 @@ int perform_real_dma_pull(struct doca_dev *dev, struct ctrl_channel *ch,
 
     if (desc_len > DMA_EXPORT_DESC_MAX) {
         printf("Export descriptor too large: %zu > %d\n", desc_len, DMA_EXPORT_DESC_MAX);
+        fprintf(stderr, "[DMA_PULL ERROR] Export descriptor too large: %zu > %d\n",
+                desc_len, DMA_EXPORT_DESC_MAX);
+        fprintf(stderr, "[DMA_PULL ERROR] Memory descriptor exceeds maximum allowed size for pull\n");
         doca_mmap_stop(gpu_mmap);
         doca_mmap_destroy(gpu_mmap);
         return -1;

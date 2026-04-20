@@ -222,20 +222,41 @@ int dpu_cache_store(const char* key_id,
                      v_attrs.type == cudaMemoryTypeDevice);
 
     // 复制数据到GPU buffer
-    cudaMemcpy(gpu_buffer, &header, sizeof(kv_header_t), cudaMemcpyHostToDevice);
+    cudaError_t cuda_err;
+    cuda_err = cudaMemcpy(gpu_buffer, &header, sizeof(kv_header_t), cudaMemcpyHostToDevice);
+    if (cuda_err != cudaSuccess) {
+        printf("[DPU_CACHE ERROR] Failed to copy header to GPU: %s\n", cudaGetErrorString(cuda_err));
+        fprintf(stderr, "[DPU_CACHE ERROR] Header copy failed: %s\n", cudaGetErrorString(cuda_err));
+        cudaFree(gpu_buffer);
+        return DPU_CACHE_ERROR;
+    }
 
     // 复制K张量（根据源位置选择拷贝类型）
     enum cudaMemcpyKind k_copy_kind = k_is_gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
-    cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t), k_data, k_size, k_copy_kind);
-    printf("K tensor copy: %s -> GPU (%s)\n", 
-       k_is_gpu ? "GPU" : "CPU", 
-       k_is_gpu ? "Device-to-Device" : "Host-to-Device");    
+    cuda_err = cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t), k_data, k_size, k_copy_kind);
+    if (cuda_err != cudaSuccess) {
+        printf("[DPU_CACHE ERROR] Failed to copy K tensor: %s\n", cudaGetErrorString(cuda_err));
+        fprintf(stderr, "[DPU_CACHE ERROR] K tensor copy failed: %s (size=%zu, kind=%s)\n",
+                cudaGetErrorString(cuda_err), k_size, k_is_gpu ? "D2D" : "H2D");
+        cudaFree(gpu_buffer);
+        return DPU_CACHE_ERROR;
+    }
+    printf("K tensor copy: %s -> GPU (%s)\n",
+       k_is_gpu ? "GPU" : "CPU",
+       k_is_gpu ? "Device-to-Device" : "Host-to-Device");
 
     // 复制V张量（根据源位置选择拷贝类型）
     enum cudaMemcpyKind v_copy_kind = v_is_gpu ? cudaMemcpyDeviceToDevice : cudaMemcpyHostToDevice;
-    cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t) + k_size, v_data, v_size, v_copy_kind);
-    printf("V tensor copy: %s -> GPU (%s)\n", 
-       v_is_gpu ? "GPU" : "CPU", 
+    cuda_err = cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t) + k_size, v_data, v_size, v_copy_kind);
+    if (cuda_err != cudaSuccess) {
+        printf("[DPU_CACHE ERROR] Failed to copy V tensor: %s\n", cudaGetErrorString(cuda_err));
+        fprintf(stderr, "[DPU_CACHE ERROR] V tensor copy failed: %s (size=%zu, kind=%s)\n",
+                cudaGetErrorString(cuda_err), v_size, v_is_gpu ? "D2D" : "H2D");
+        cudaFree(gpu_buffer);
+        return DPU_CACHE_ERROR;
+    }
+    printf("V tensor copy: %s -> GPU (%s)\n",
+       v_is_gpu ? "GPU" : "CPU",
        v_is_gpu ? "Device-to-Device" : "Host-to-Device");    
     // cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t), k_data, k_size, cudaMemcpyDeviceToDevice);
     // cudaMemcpy((char*)gpu_buffer + sizeof(kv_header_t) + k_size, v_data, v_size, cudaMemcpyDeviceToDevice);

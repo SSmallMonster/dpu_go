@@ -18,7 +18,8 @@ find_library(DOCA_COMCH_LIB doca_comch PATHS ${DOCA_DIR}/lib/x86_64-linux-gnu ${
 include_directories(${PROJECT_SOURCE_DIR}/include ${DOCA_INCLUDE_DIR})
 
 add_executable(dpu_dma_copy
-    src/dpu_dma_copy.c
+    src/dpu_server_main.c
+    src/dpu_dma_real.c
     src/ctrl_channel.c
     src/comch_ctrl.c
     src/doca_device_utils.c

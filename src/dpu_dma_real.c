@@ -2,6 +2,7 @@
 #include "dpu_cache_api.h"
 #include "ctrl_channel.h"
 #include "dma_transfer.h"
+#include "doca_device_utils.h"
 
 #include <doca_buf.h>
 #include <doca_buf_inventory.h>
@@ -851,6 +852,7 @@ out:
 		fclose(fp);
 	return result;
 }
+
 // 完整的DMA服务器实现 - 可以处理来自客户端的DMA请求
 int run_dma_server(const char *pci_addr, const char *rep_pci_addr,
                    const char *service_name, bool use_tcp)

@@ -829,7 +829,7 @@ int run_dma_server(const char *pci_addr, const char *rep_pci_addr,
 				stage_mib * 1024ULL * 1024ULL,
 				0, // 使用默认chunk大小
 				queue_depth);
-	if (result \!= DOCA_SUCCESS) {
+	if (result != DOCA_SUCCESS) {
 		fprintf(stderr, "Failed to initialize DMA runtime: %s\n", doca_error_get_descr(result));
 		return -1;
 	}
@@ -892,7 +892,7 @@ int run_dma_server(const char *pci_addr, const char *rep_pci_addr,
 		resp.status = result == DOCA_SUCCESS ? 0U : 1U;
 		resp.error_code = (uint32_t)result;
 		result = ctrl_channel_send(ch, &resp, sizeof(resp));
-		if (result \!= DOCA_SUCCESS)
+		if (result != DOCA_SUCCESS)
 			break;
 		(void)ctrl_channel_progress(ch);
 	}

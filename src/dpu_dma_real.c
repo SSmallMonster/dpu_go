@@ -841,7 +841,7 @@ int run_dma_server(const char *pci_addr, const char *rep_pci_addr,
 	// 创建控制通道
 	if (use_tcp) {
 		result = ctrl_channel_tcp_server_create(DMA_TRANSFER_PORT, &ch);
-		if (result \!= DOCA_SUCCESS) {
+		if (result != DOCA_SUCCESS) {
 			fprintf(stderr, "Failed to create TCP server: %s\n", doca_error_get_descr(result));
 			destroy_runtime_server(&runtime);
 			return -1;
@@ -849,7 +849,7 @@ int run_dma_server(const char *pci_addr, const char *rep_pci_addr,
 		printf("[DPU] Waiting for TCP client on port %u\n", DMA_TRANSFER_PORT);
 	} else {
 		result = ctrl_channel_comch_server_create(service_name, pci_addr, rep_pci_addr, &ch);
-		if (result \!= DOCA_SUCCESS) {
+		if (result != DOCA_SUCCESS) {
 			fprintf(stderr, "Failed to create Comch server: %s\n", doca_error_get_descr(result));
 			destroy_runtime_server(&runtime);
 			return -1;
@@ -868,9 +868,9 @@ int run_dma_server(const char *pci_addr, const char *rep_pci_addr,
 		uint32_t msg_len = 0;
 
 		result = ctrl_channel_wait_for_message(ch, &req, sizeof(req), &msg_len);
-		if (result \!= DOCA_SUCCESS)
+		if (result != DOCA_SUCCESS)
 			break;
-		if (msg_len \!= sizeof(req) || req.magic \!= DMA_TRANSFER_MAGIC || req.version \!= DMA_TRANSFER_VERSION)
+		if (msg_len != sizeof(req) || req.magic != DMA_TRANSFER_MAGIC || req.version != DMA_TRANSFER_VERSION)
 			break;
 
 		init_response_server(&resp, &req, DOCA_SUCCESS);

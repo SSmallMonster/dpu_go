@@ -152,12 +152,12 @@ class DPUAgent:
         """存储KV张量到DPU"""
         try:
             # 验证tensor在GPU上
-            if not k_tensor.is_cuda or not v_tensor.is_cuda:
-                raise ValueError("Tensors must be on CUDA device")
+            # if not k_tensor.is_cuda or not v_tensor.is_cuda:
+            #     raise ValueError("Tensors must be on CUDA device")
 
-            # 验证tensor在同一设备
-            if k_tensor.device != v_tensor.device:
-                raise ValueError("K and V tensors must be on same device")
+            # # 验证tensor在同一设备
+            # if k_tensor.device != v_tensor.device:
+            #     raise ValueError("K and V tensors must be on same device")
 
             # 验证tensor数据类型一致
             if k_tensor.dtype != v_tensor.dtype:

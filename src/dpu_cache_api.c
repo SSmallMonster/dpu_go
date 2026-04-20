@@ -110,7 +110,21 @@ int dpu_cache_cleanup(void) {
 
 // 生成DPU端文件路径
 static void generate_dpu_path(const char* key_id, char* dpu_path, size_t path_size) {
-    snprintf(dpu_path, path_size, "/tmp/kv_cache_%s.bin", key_id);
+    // 计算key_id的哈希值，生成安全的文件名
+    uint32_t hash = 0;
+    const char* str = key_id;
+    while (*str) {
+        hash = hash * 31 + (unsigned char)(*str);
+        str++;
+    }
+
+    // 使用哈希值生成简短且安全的文件名
+    snprintf(dpu_path, path_size, "/tmp/kv_cache_%08x.bin", hash);
+
+    // 打印调试信息
+    printf("[DPU_CACHE] Generated safe file path: %s (from key: %.50s...)\n",
+           dpu_path, key_id);
+    fprintf(stderr, "[DPU_CACHE] Using safe file path: %s\n", dpu_path);
 }
 
 // 创建KV头部

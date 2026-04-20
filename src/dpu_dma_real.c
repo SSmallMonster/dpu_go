@@ -20,6 +20,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <errno.h>
 
 // ========== SERVER-SIDE DMA CONSTANTS ==========
 #define DEFAULT_STAGE_MIB 256ULL
@@ -739,8 +740,11 @@ static doca_error_t handle_push_to_dpu_server(struct dma_runtime *runtime,
 	doca_error_t result;
 
 	fp = fopen(req->dpu_path, "wb");
-	if (fp == NULL)
+	if (fp == NULL) {
+		printf("[DPU] Failed to create file: %s (errno: %d - %s)\n",
+		       req->dpu_path, errno, strerror(errno));
 		return DOCA_ERROR_IO_FAILED;
+	}
 
 	result = doca_mmap_create_from_export(NULL,
 					      req->export_desc,
